@@ -4,158 +4,147 @@ const ctx = canvas.getContext("2d");
 canvas.width = 800;
 canvas.height = 400;
 
-// Player objects
 const player1 = { x: 100, y: 300, width: 40, height: 40, color: "blue", health: 100, shield: 100, shieldActive: false };
 const player2 = { x: 600, y: 300, width: 40, height: 40, color: "red", health: 100, shield: 100, shieldActive: false };
 
-// Bullets
 let bullets = [];
+const speed = 5;
+let gameRunning = true;
 
-// Controls
 const keys = {
     w: false, a: false, s: false, d: false, // Player 1
     ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false, // Player 2
     q: false, m: false // Shield keys
 };
 
-const speed = 5;
-let gameRunning = true; // Ensure game stops when a player dies
-
-// Event listeners for movement & shield
+// 🎮 Event Listeners
 document.addEventListener("keydown", (e) => {
     if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
-
-    // Activate shield
     if (e.key === "q" && player1.shield > 0) player1.shieldActive = true;
     if (e.key === "m" && player2.shield > 0) player2.shieldActive = true;
+    if (e.key === " " && gameRunning) shoot(player1); // Spacebar for Player 1
+    if (e.key === "Enter" && gameRunning) shoot(player2); // Enter for Player 2
 });
 
 document.addEventListener("keyup", (e) => {
     if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-
-    // Deactivate shield
     if (e.key === "q") player1.shieldActive = false;
     if (e.key === "m") player2.shieldActive = false;
 });
 
-// Shooting function
+// 🎯 Shooting Function
 function shoot(player) {
-    if (!gameRunning) return; // Prevent shooting after game over
-
-    let bulletSpeed = player === player1 ? 7 : -7;
+    if (!gameRunning) return;
     bullets.push({
         x: player.x + player.width / 2,
         y: player.y + player.height / 2,
         width: 10,
         height: 5,
-        speed: bulletSpeed,
+        speed: player === player1 ? 7 : -7,
         color: player.color,
         shooter: player
     });
 }
 
-// Game loop
+// 📌 Collision Detection
+function checkBulletCollision(bullet, target) {
+    return (
+        bullet.x >= target.x && bullet.x <= target.x + target.width &&
+        bullet.y >= target.y && bullet.y <= target.y + target.height
+    );
+}
+
+// 🕹️ Game Loop
 function gameLoop() {
-    if (!gameRunning) return; // Stop the game loop when a player wins
+    if (!gameRunning) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Player movement (with boundary restriction)
-    if (keys.a && player1.x > 0) player1.x -= speed;
-    if (keys.d && player1.x + player1.width < canvas.width) player1.x += speed;
-    if (keys.w && player1.y > 0) player1.y -= speed;
-    if (keys.s && player1.y + player1.height < canvas.height) player1.y += speed;
+    // 🎭 Player Movement
+    movePlayer(player1, keys.w, keys.a, keys.s, keys.d);
+    movePlayer(player2, keys.ArrowUp, keys.ArrowLeft, keys.ArrowDown, keys.ArrowRight);
 
-    if (keys.ArrowLeft && player2.x > 0) player2.x -= speed;
-    if (keys.ArrowRight && player2.x + player2.width < canvas.width) player2.x += speed;
-    if (keys.ArrowUp && player2.y > 0) player2.y -= speed;
-    if (keys.ArrowDown && player2.y + player2.height < canvas.height) player2.y += speed;
-
-    // Draw players
-    ctx.fillStyle = player1.color;
-    ctx.fillRect(player1.x, player1.y, player1.width, player1.height);
-
-    ctx.fillStyle = player2.color;
-    ctx.fillRect(player2.x, player2.y, player2.width, player2.height);
-
-    // Move bullets
-    bullets.forEach((bullet, index) => {
+    // 🏹 Move Bullets & Check Collisions
+    bullets = bullets.filter((bullet) => {
         bullet.x += bullet.speed;
-        
-        // Check collision with player 2
-        if (
-            bullet.shooter === player1 &&
-            bullet.x >= player2.x && bullet.x <= player2.x + player2.width &&
-            bullet.y >= player2.y && bullet.y <= player2.y + player2.height
-        ) {
-            if (player2.shieldActive && player2.shield > 0) {
-                player2.shield -= 20; // Reduce shield instead of health
+        if (bullet.x < 0 || bullet.x > canvas.width) return false; // Remove out-of-bounds bullets
+
+        let target = bullet.shooter === player1 ? player2 : player1;
+        if (checkBulletCollision(bullet, target)) {
+            if (target.shieldActive && target.shield > 0) {
+                target.shield -= 20;
             } else {
-                player2.health -= 10;
+                target.health -= 10;
             }
-            bullets.splice(index, 1);
+            updateHealthUI();
+            return false; // Remove bullet on hit
         }
-
-        // Check collision with player 1
-        if (
-            bullet.shooter === player2 &&
-            bullet.x <= player1.x + player1.width && bullet.x >= player1.x &&
-            bullet.y >= player1.y && bullet.y <= player1.y + player1.height
-        ) {
-            if (player1.shieldActive && player1.shield > 0) {
-                player1.shield -= 20; // Reduce shield instead of health
-            } else {
-                player1.health -= 10;
-            }
-            bullets.splice(index, 1);
-        }
-
-        // Remove bullets out of bounds
-        if (bullet.x < 0 || bullet.x > canvas.width) {
-            bullets.splice(index, 1);
-        }
-
-        // Draw bullet
-        ctx.fillStyle = bullet.color;
-        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+        return true; // Keep bullet if no collision
     });
 
-    // Draw shield if active
-    if (player1.shieldActive && player1.shield > 0) {
-        ctx.strokeStyle = "cyan";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(player1.x - 5, player1.y - 5, player1.width + 10, player1.height + 10);
-    }
-    if (player2.shieldActive && player2.shield > 0) {
-        ctx.strokeStyle = "yellow";
-        ctx.lineWidth = 3;
-        ctx.strokeRect(player2.x - 5, player2.y - 5, player2.width + 10, player2.height + 10);
-    }
+    // 🎨 Draw Elements
+    drawPlayer(player1);
+    drawPlayer(player2);
+    bullets.forEach(drawBullet);
+    drawShields();
 
-    // Display health & shield
-    ctx.fillStyle = "white";
-    ctx.font = "16px Arial";
-    ctx.fillText(`P1 Health: ${player1.health}% | Shield: ${player1.shield}%`, 10, 20);
-    ctx.fillText(`P2 Health: ${player2.health}% | Shield: ${player2.shield}%`, canvas.width - 220, 20);
-
-    // Check if player dies
-    if (player1.health <= 0) {
-        document.getElementById("winner").innerText = "Player 2 Wins!";
+    // 🚨 Check Game Over
+    if (player1.health <= 0 || player2.health <= 0) {
+        document.getElementById("winner").innerText = player1.health <= 0 ? "Player 2 Wins!" : "Player 1 Wins!";
         gameRunning = false;
+    } else {
+        requestAnimationFrame(gameLoop);
     }
-    if (player2.health <= 0) {
-        document.getElementById("winner").innerText = "Player 1 Wins!";
-        gameRunning = false;
-    }
+}
 
+// 🎮 Move Player
+function movePlayer(player, up, left, down, right) {
+    if (left && player.x > 0) player.x -= speed;
+    if (right && player.x + player.width < canvas.width) player.x += speed;
+    if (up && player.y > 0) player.y -= speed;
+    if (down && player.y + player.height < canvas.height) player.y += speed;
+}
+
+// 🏹 Draw Elements
+function drawPlayer(player) {
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+}
+
+function drawBullet(bullet) {
+    ctx.fillStyle = bullet.color;
+    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+}
+
+function drawShields() {
+    if (player1.shieldActive && player1.shield > 0) drawShield(player1, "cyan");
+    if (player2.shieldActive && player2.shield > 0) drawShield(player2, "yellow");
+}
+
+function drawShield(player, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(player.x - 5, player.y - 5, player.width + 10, player.height + 10);
+}
+
+// ❤️ Update Health UI
+function updateHealthUI() {
+    document.getElementById("p1HealthBar").style.width = `${player1.health}%`;
+    document.getElementById("p1HealthText").innerText = `${player1.health}%`;
+    document.getElementById("p2HealthBar").style.width = `${player2.health}%`;
+    document.getElementById("p2HealthText").innerText = `${player2.health}%`;
+}
+
+// 🔄 Restart Game
+function restartGame() {
+    player1.x = 100; player1.y = 300; player1.health = 100; player1.shield = 100; player1.shieldActive = false;
+    player2.x = 600; player2.y = 300; player2.health = 100; player2.shield = 100; player2.shieldActive = false;
+    bullets = [];
+    gameRunning = true;
+    document.getElementById("winner").innerText = "";
+    updateHealthUI();
     requestAnimationFrame(gameLoop);
 }
 
-// Shooting event
-document.addEventListener("keydown", (e) => {
-    if (e.key === " " && gameRunning) shoot(player1); // Player 1 shoots with Space
-    if (e.key === "Enter" && gameRunning) shoot(player2); // Player 2 shoots with Enter
-});
-
-// Start game
+// 🚀 Start Game
 gameLoop();
